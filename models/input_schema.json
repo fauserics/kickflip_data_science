@@ -1,0 +1,161 @@
+{
+  "columns": [
+    {
+      "name": "age",
+      "type": "numeric",
+      "values": null
+    },
+    {
+      "name": "workclass",
+      "type": "categorical",
+      "values": [
+        "Federal-gov",
+        "Local-gov",
+        "Never-worked",
+        "Private",
+        "Self-emp-inc",
+        "Self-emp-not-inc",
+        "State-gov",
+        "Without-pay"
+      ]
+    },
+    {
+      "name": "fnlwgt",
+      "type": "numeric",
+      "values": null
+    },
+    {
+      "name": "education",
+      "type": "categorical",
+      "values": [
+        "10th",
+        "11th",
+        "12th",
+        "1st-4th",
+        "5th-6th",
+        "7th-8th",
+        "9th",
+        "Assoc-acdm",
+        "Assoc-voc",
+        "Bachelors",
+        "Doctorate",
+        "HS-grad",
+        "Masters",
+        "Preschool",
+        "Prof-school",
+        "Some-college"
+      ]
+    },
+    {
+      "name": "education-num",
+      "type": "numeric",
+      "values": null
+    },
+    {
+      "name": "marital-status",
+      "type": "categorical",
+      "values": [
+        "Divorced",
+        "Married-AF-spouse",
+        "Married-civ-spouse",
+        "Married-spouse-absent",
+        "Never-married",
+        "Separated",
+        "Widowed"
+      ]
+    },
+    {
+      "name": "occupation",
+      "type": "categorical",
+      "values": [
+        "Adm-clerical",
+        "Armed-Forces",
+        "Craft-repair",
+        "Exec-managerial",
+        "Farming-fishing",
+        "Handlers-cleaners",
+        "Machine-op-inspct",
+        "Other-service",
+        "Priv-house-serv",
+        "Prof-specialty",
+        "Protective-serv",
+        "Sales",
+        "Tech-support",
+        "Transport-moving"
+      ]
+    },
+    {
+      "name": "relationship",
+      "type": "categorical",
+      "values": [
+        "Husband",
+        "Not-in-family",
+        "Other-relative",
+        "Own-child",
+        "Unmarried",
+        "Wife"
+      ]
+    },
+    {
+      "name": "race",
+      "type": "categorical",
+      "values": [
+        "Amer-Indian-Eskimo",
+        "Asian-Pac-Islander",
+        "Black",
+        "Other",
+        "White"
+      ]
+    },
+    {
+      "name": "sex",
+      "type": "categorical",
+      "values": [
+        "Female",
+        "Male"
+      ]
+    },
+    {
+      "name": "capital-gain",
+      "type": "numeric",
+      "values": null
+    },
+    {
+      "name": "capital-loss",
+      "type": "numeric",
+      "values": null
+    },
+    {
+      "name": "hours-per-week",
+      "type": "numeric",
+      "values": null
+    },
+    {
+      "name": "native-country",
+      "type": "categorical",
+      "values": [
+        "Cambodia",
+        "Canada",
+        "China",
+        "Columbia",
+        "Cuba",
+        "Dominican-Republic",
+        "Ecuador",
+        "El-Salvador",
+        "England",
+        "France",
+        "Germany",
+        "Greece",
+        "Guatemala",
+        "Haiti",
+        "Holand-Netherlands",
+        "Honduras",
+        "Hong",
+        "Hungary",
+        "India",
+        "Iran"
+      ]
+    }
+  ],
+  "target": "class"
+}

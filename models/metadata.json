@@ -1,0 +1,34 @@
+{
+  "problem_type": "binary_classification",
+  "dataset": "OpenML adult (Census Income, data_id=1590)",
+  "target": "class",
+  "rows": 48842,
+  "best_model": "XGBoost",
+  "cv": [
+    {
+      "model": "XGBoost",
+      "roc_auc": 0.9286260786224071,
+      "roc_auc_std": 0.0023448915083496037,
+      "cv_folds": 5
+    },
+    {
+      "model": "LogReg",
+      "roc_auc": 0.9055448195885433,
+      "roc_auc_std": 0.0038090009198278076,
+      "cv_folds": 5
+    },
+    {
+      "model": "RandomForest",
+      "roc_auc": 0.9024076798135354,
+      "roc_auc_std": 0.00408149933213294,
+      "cv_folds": 5
+    }
+  ],
+  "holdout": {
+    "roc_auc": 0.9298862048669255,
+    "f1": 0.7158139534883721,
+    "accuracy": 0.8749104309550619,
+    "threshold": 0.5
+  },
+  "random_state": 42
+}
