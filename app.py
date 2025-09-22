@@ -1,5 +1,4 @@
 import io
-import json
 import os
 import time
 from typing import Dict, Any
@@ -8,6 +7,12 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+
+# Si vas a disparar GitHub Actions desde la app, necesitás requests
+try:
+    import requests  # añadido a requirements.txt
+except Exception:
+    requests = None
 
 from utils import (
     load_model, load_metadata, load_schema,
@@ -33,8 +38,8 @@ with st.expander("ℹ️ Cómo funciona"):
         "- **Datos:** OpenML *Adult* (ingresos > USD 50k).\n"
         "- **Modelos:** Regresión Logística, Random Forest, XGBoost (selección automática por ROC AUC).\n"
         "- **Métricas:** ROC AUC (CV), precisión, F1 en hold-out.\n"
-        "- **Uso:** formulario para un caso individual o upload de CSV para múltiples casos.\n"
-        "- **Arquitectura:** Python + scikit-learn + Streamlit + GitHub Actions (re-entrenos opcionales).\n"
+        "- **Arquitectura recomendada:** GitHub Actions entrena y commitea el modelo; "
+        "Streamlit Cloud sirve la UI y **lee** el modelo del repo.\n"
     )
 
 # ------------------------- KPIs de cabecera -------------------------
@@ -51,7 +56,7 @@ st.divider()
 
 # ------------------------- Tabs -------------------------
 tab_overview, tab_train, tab_realtime, tab_batch, tab_monitor = st.tabs(
-    ["📊 Overview", "🛠️ Entrenar & Comparar", "🧮 Scoring en tiempo real", "📂 Scoring por archivo", "📡 Monitor"]
+    ["📊 Overview", "🛠️ Entrenar", "🧮 Scoring en tiempo real", "📂 Scoring por archivo", "📡 Monitor"]
 )
 
 # ========================= 1) OVERVIEW =========================
@@ -63,8 +68,6 @@ with tab_overview:
         st.dataframe(cv_df, use_container_width=True)
         holdout = meta.get("holdout", {})
         st.write("**Hold-out:**", holdout)
-
-        # Gráfico simple
         if not cv_df.empty:
             fig = px.bar(
                 cv_df, x="model", y="roc_auc",
@@ -73,37 +76,82 @@ with tab_overview:
             )
             st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("No hay metadatos aún. Ve a **Entrenar & Comparar** para generar el primer modelo.")
+        st.info("No hay metadatos aún. Ve a **Entrenar** para generar el primer modelo.")
 
 # ========================= 2) TRAIN =========================
 with tab_train:
     st.subheader("Entrenar / Re-entrenar")
-    st.caption("Esto descarga el dataset desde OpenML (requiere internet en el entorno donde se ejecute `train.py`).")
-    run_train = st.button("🚀 Entrenar ahora", type="primary")
 
-    if run_train:
-        with st.spinner("Entrenando…"):
-            # Ejecuta el script de entrenamiento
-            exit_code = os.system("python train.py")
-            # Pequeña espera para asegurar escritura de artefactos
-            time.sleep(1.0)
+    subtab_actions, subtab_local = st.tabs(["🚀 GitHub Actions (recomendado)", "🧪 Local en el runtime (opcional)"])
 
-        if exit_code == 0:
-            # Limpia cualquier caché de Streamlit por si existiera
-            try:
-                st.cache_data.clear()
-            except Exception:
-                pass
-            try:
-                st.cache_resource.clear()
-            except Exception:
-                pass
+    # ---------- A) Disparar GitHub Actions ----------
+    with subtab_actions:
+        st.caption("Dispara el workflow de GitHub; cuando termine y haga push, la app usará el nuevo modelo.")
+        owner = st.secrets.get("GH_OWNER")
+        repo = st.secrets.get("GH_REPO")
+        ref = st.secrets.get("GH_REF", "main")
+        workflow_path = st.secrets.get("GH_WORKFLOW", ".github/workflows/train.yml")
+        token = st.secrets.get("GH_TOKEN")
 
-            st.success("Entrenamiento finalizado. Refrescando métricas…")
-            # Vuelve a ejecutar el script y recarga estado/artefactos
-            st.rerun()
-        else:
-            st.error("Falló el entrenamiento. Revisá logs de consola / Actions.")
+        # URL útil para ver el workflow (si configuraste owner/repo)
+        if owner and repo:
+            actions_url = f"https://github.com/{owner}/{repo}/actions"
+            st.link_button("🧭 Ver workflows en GitHub Actions", actions_url, type="secondary")
+
+        def trigger_workflow(owner: str, repo: str, workflow_path: str, ref: str, token: str):
+            """
+            Dispara workflow_dispatch. GitHub acepta:
+            /actions/workflows/{workflow_id|file_name}/dispatches
+            """
+            # Usamos el nombre del archivo del workflow
+            workflow_file = workflow_path.split("/")[-1]
+            url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_file}/dispatches"
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json"
+            }
+            data = {"ref": ref}
+            return requests.post(url, headers=headers, json=data, timeout=30)
+
+        disabled = not all([owner, repo, token]) or (requests is None)
+        if not requests:
+            st.warning("Falta el paquete 'requests'. Asegurate de tenerlo en requirements.txt (requests>=2.31).")
+
+        with st.form("form_actions"):
+            run_now = st.form_submit_button("🔁 Disparar re-entreno en GitHub")
+        if run_now:
+            if disabled:
+                st.error("Faltan secretos GH_TOKEN/GH_OWNER/GH_REPO o el paquete 'requests'. Configuralos en Settings → Secrets de Streamlit.")
+            else:
+                with st.spinner("Lanzando workflow en GitHub Actions…"):
+                    r = trigger_workflow(owner, repo, workflow_path, ref, token)
+                if r.status_code in (201, 204):
+                    st.success("Workflow disparado correctamente.")
+                    st.info("Cuando el workflow termine y haga push, esta app leerá el nuevo modelo del repo.")
+                else:
+                    st.error(f"Error al disparar el workflow ({r.status_code}): {r.text}")
+
+    # ---------- B) Entrenamiento local (opcional; puede fallar en Streamlit Cloud) ----------
+    with subtab_local:
+        st.caption("Ejecuta `python train.py` en el entorno actual. Útil en local; en Streamlit Cloud puede fallar por límites del entorno.")
+        if st.button("▶️ Entrenar aquí (local)"):
+            with st.spinner("Entrenando…"):
+                exit_code = os.system("python train.py")
+                time.sleep(1.0)
+            if exit_code == 0:
+                # Limpiar caché y forzar recarga
+                try:
+                    st.cache_data.clear()
+                except Exception:
+                    pass
+                try:
+                    st.cache_resource.clear()
+                except Exception:
+                    pass
+                st.success("Entrenamiento finalizado. Refrescando métricas…")
+                st.rerun()
+            else:
+                st.error("Falló el entrenamiento. Revisá logs (consola/Actions).")
 
 # ========================= 3) REAL-TIME SCORING =========================
 with tab_realtime:
@@ -112,10 +160,10 @@ with tab_realtime:
     model = load_model()
 
     if not model or not schema:
-        st.warning("Primero entrena un modelo en la pestaña **Entrenar & Comparar**.")
+        st.warning("Primero entrená un modelo en la pestaña **Entrenar**.")
     else:
         with st.form("form_realtime"):
-            inputs = {}
+            inputs: Dict[str, Any] = {}
             for col in schema["columns"]:
                 name = col["name"]
                 if col["type"] == "numeric":
@@ -148,7 +196,7 @@ with tab_batch:
     model = load_model()
 
     if not model or not schema:
-        st.warning("Primero entrena un modelo en la pestaña **Entrenar & Comparar**.")
+        st.warning("Primero entrená un modelo en la pestaña **Entrenar**.")
     else:
         uploaded = st.file_uploader("Subí un CSV", type=["csv"])
         if uploaded:
