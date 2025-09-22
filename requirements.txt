@@ -6,3 +6,4 @@ joblib>=1.4
 xgboost>=2.0
 plotly>=5.23
 pyyaml>=6.0
+requests>=2.31
