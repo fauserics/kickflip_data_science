@@ -7,8 +7,8 @@ venv/
 .env.*
 data/*.csv
 !data/sample_adult_small.csv
+# --- MODELS ---
 models/*
+!models/*.joblib
+!models/*.json
 !models/.gitkeep
-.streamlit/
-.DS_Store
-Thumbs.db
