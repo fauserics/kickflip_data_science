@@ -8,5 +8,4 @@ plotly>=5.23
 pyyaml>=6.0
 requests>=2.31
 statsmodels>=0.14
-pmdarima>=2.0
 
