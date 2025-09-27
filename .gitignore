@@ -7,6 +7,8 @@ venv/
 .env.*
 data/*.csv
 !data/sample_adult_small.csv
+!data/train_classif.csv
+!data/ts_train.csv
 # --- MODELS ---
 models/*
 !models/*.joblib
