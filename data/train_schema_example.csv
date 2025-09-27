@@ -1,0 +1,6 @@
+age,workclass,education,education-num,marital-status,occupation,relationship,race,sex,capital-gain,capital-loss,hours-per-week,native-country,income
+39,State-gov,Bachelors,13,Never-married,Adm-clerical,Not-in-family,White,Male,2174,0,40,United-States,<=50K
+50,Self-emp-not-inc,Bachelors,13,Married-civ-spouse,Exec-managerial,Husband,White,Male,0,0,13,United-States,<=50K
+41,Private,Masters,14,Married-civ-spouse,Prof-specialty,Husband,White,Male,5000,0,45,United-States,>50K
+29,Private,HS-grad,9,Never-married,Sales,Not-in-family,Black,Female,0,0,38,United-States,<=50K
+55,Private,Doctorate,16,Married-civ-spouse,Prof-specialty,Husband,White,Male,0,0,50,United-States,>50K
