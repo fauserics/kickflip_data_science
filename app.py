@@ -55,8 +55,8 @@ with col3:
 st.divider()
 
 # ------------------------- Tabs -------------------------
-tab_overview, tab_train, tab_realtime, tab_batch, tab_monitor = st.tabs(
-    ["📊 Overview", "🛠️ Entrenar", "🧮 Scoring en tiempo real", "📂 Scoring por archivo", "📡 Monitor"]
+tab_overview, tab_train, tab_realtime, tab_batch, tab_monitor, tab_forecast = st.tabs(
+    ["📊 Overview", "🛠️ Entrenar", "🧮 Scoring en tiempo real", "📂 Scoring por archivo", "📡 Monitor", "🔮 Forecasting"]
 )
 
 # ========================= 1) OVERVIEW =========================
@@ -225,3 +225,69 @@ with tab_monitor:
     meta = load_metadata()
     st.json(meta if meta else {"status": "No metadata yet"})
     st.caption("Tip: en producción podés registrar estos metadatos en un dashboard propio o DataDog/Prometheus.")
+
+
+# ========================= 6) FORECASTING =========================
+with tab_forecast:
+    from forecast_utils import (
+        load_demo_forecast_model, load_demo_forecast_meta,
+        fit_autoarima, _parse_ts, forecast_to_df
+    )
+    import plotly.graph_objects as go
+
+    st.subheader("Forecasting en tiempo real")
+    sub_demo, sub_upload = st.tabs(["📦 Demo pre-entrenada", "📤 Tu serie (entrena al vuelo)"])
+
+    # --- A) DEMO PRE-ENTRENADA (lee artefactos del repo) ---
+    with sub_demo:
+        demo_model = load_demo_forecast_model()
+        demo_meta  = load_demo_forecast_meta()
+        if not demo_model or not demo_meta:
+            st.warning("Aún no hay modelo de forecasting demo. Corré `forecast_train.py` en Actions y commiteá los artefactos.")
+        else:
+            steps = st.number_input("Horizonte (meses)", 1, 36, 12)
+            yhat = demo_model.get_forecast(int(steps)).predicted_mean.values
+            # serie histórica
+            hist = demo_model.model.endog
+            idx_hist = demo_model.model.data.row_labels
+            hist = pd.Series(hist, index=idx_hist, name="y")
+            out = forecast_to_df(hist, yhat, int(steps))
+
+            st.write("**Meta:**", demo_meta)
+            fig = go.Figure()
+            fig.add_scatter(x=hist.index, y=hist.values, mode="lines", name="histórico")
+            fig.add_scatter(x=out["ds"], y=out["yhat"], mode="lines", name="pronóstico")
+            fig.update_layout(title="Pronóstico (demo AirPassengers)", xaxis_title="Fecha", yaxis_title="Valor")
+            st.plotly_chart(fig, use_container_width=True)
+
+            # descarga
+            csv = out.to_csv(index=False).encode("utf-8")
+            st.download_button("⬇️ Descargar pronóstico (CSV)", csv, "forecast_demo.csv", "text/csv")
+
+    # --- B) SUBIR SERIE Y ENTRENAR AL VUELO (rápido) ---
+    with sub_upload:
+        st.caption("Formato CSV con columnas: `ds,y` o `date,value` (fechas en ISO o dd/mm/aaaa).")
+        f = st.file_uploader("Subí tu serie temporal", type=["csv"])
+        steps2 = st.number_input("Horizonte a pronosticar", 1, 60, 12, key="steps_upload")
+        if f:
+            try:
+                df = pd.read_csv(f)
+                s, freq = _parse_ts(df)
+                st.write(f"Frecuencia detectada: **{freq}** — Observaciones: **{len(s)}**")
+
+                with st.spinner("Entrenando modelo Auto-ARIMA…"):
+                    model = fit_autoarima(s)
+                    yhat = model.predict(n_periods=int(steps2))
+                out = forecast_to_df(s, yhat, int(steps2))
+
+                fig2 = go.Figure()
+                fig2.add_scatter(x=s.index, y=s.values, mode="lines", name="histórico")
+                fig2.add_scatter(x=out["ds"], y=out["yhat"], mode="lines", name="pronóstico")
+                fig2.update_layout(title="Pronóstico (serie subida)", xaxis_title="Fecha", yaxis_title="Valor")
+                st.plotly_chart(fig2, use_container_width=True)
+
+                csv2 = out.to_csv(index=False).encode("utf-8")
+                st.download_button("⬇️ Descargar pronóstico (CSV)", csv2, "forecast_uploaded.csv", "text/csv")
+            except Exception as e:
+                st.error(f"No se pudo procesar la serie: {e}")
+
