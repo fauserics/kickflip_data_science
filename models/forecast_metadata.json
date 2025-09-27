@@ -1,0 +1,22 @@
+{
+  "framework": "statsmodels",
+  "algorithm": "SARIMAX",
+  "order": [
+    0,
+    1,
+    1
+  ],
+  "seasonal_order": [
+    1,
+    1,
+    1,
+    12
+  ],
+  "aic": 920.3192974989266,
+  "trained_at_utc": "2025-09-27T22:13:34.054282Z",
+  "freq": "MS",
+  "observations": 144,
+  "train_start": "1949-01-01",
+  "train_end": "1960-12-01",
+  "source": "AirPassengers or synthetic"
+}
