@@ -237,6 +237,64 @@ with tab_forecast:
 
     st.subheader("Forecasting en tiempo real")
 
+    # --- Controles de entrenamiento dentro de Forecasting ---
+with st.container(border=True):
+    st.markdown("### ⚙️ Entrenamiento del modelo de forecast (demo)")
+    colA, colB = st.columns(2)
+
+    # Botón A: Disparar workflow de GitHub Actions (recomendado)
+    with colA:
+        try:
+            import requests
+        except Exception:
+            requests = None
+
+        owner = st.secrets.get("GH_OWNER")
+        repo  = st.secrets.get("GH_REPO")
+        ref   = st.secrets.get("GH_REF", "main")
+        token = st.secrets.get("GH_TOKEN")
+        wf_forecast = st.secrets.get("GH_WF_FORECAST", "retrain-forecast.yml")
+
+        def dispatch_workflow(owner: str, repo: str, workflow_file_or_name: str, ref: str, token: str):
+            workflow_id = workflow_file_or_name.split("/")[-1]
+            url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches"
+            headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+            return requests.post(url, headers=headers, json={"ref": ref}, timeout=30)
+
+        disabled = not all([owner, repo, token]) or (requests is None)
+        if st.button("🔁 Re-entrenar forecasting en GitHub"):
+            if disabled:
+                st.error("Faltan Secrets (GH_TOKEN/OWNER/REPO) o el paquete 'requests'.")
+            else:
+                with st.spinner("Lanzando workflow de forecasting en GitHub Actions…"):
+                    r = dispatch_workflow(owner, repo, wf_forecast, ref, token)
+                if r.status_code in (201, 204):
+                    st.success("Workflow disparado. Al terminar y pushear, esta app tomará el nuevo modelo.")
+                else:
+                    st.error(f"Error {r.status_code}: {r.text}")
+
+    # Botón B: Entrenamiento local (opcional; útil en local, no en Streamlit Cloud)
+    with colB:
+        st.caption("Opción local (puede fallar en Streamlit Cloud por límites de entorno).")
+        if st.button("▶️ Entrenar aquí con forecast_train.py"):
+            with st.spinner("Entrenando modelo SARIMAX…"):
+                code = os.system("python forecast_train.py")
+                time.sleep(1.0)
+            if code == 0:
+                try:
+                    st.cache_data.clear()
+                except Exception:
+                    pass
+                try:
+                    st.cache_resource.clear()
+                except Exception:
+                    pass
+                st.success("Entrenamiento finalizado. Recargando…")
+                st.rerun()
+            else:
+                st.error("Falló el entrenamiento local. Usá el botón de GitHub Actions.")
+
+
     sub_demo, sub_upload = st.tabs(["📦 Demo pre-entrenada", "📤 Tu serie (entrena al vuelo)"])
 
     # --- A) DEMO PRE-ENTRENADA ---
