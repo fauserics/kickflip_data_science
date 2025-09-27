@@ -10,7 +10,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-# Si vas a disparar GitHub Actions desde la app, necesitás requests
+# requests es opcional (solo para disparar GitHub Actions)
 try:
     import requests
 except Exception:
@@ -39,7 +39,7 @@ st.markdown(
 with st.expander("ℹ️ Cómo funciona"):
     st.markdown(
         "- **Clasificador:** OpenML *Adult* (ingresos > USD 50k). Modelos: LogReg, RandomForest, XGBoost (selección por ROC AUC).\n"
-        "- **Forecasting:** modelo SARIMAX mensual (statsmodels). Demo pre-entrenada + entreno al vuelo con CSV o datos manuales.\n"
+        "- **Forecasting:** modelo SARIMAX (statsmodels). Demo pre-entrenada + entreno al vuelo con CSV o datos manuales.\n"
         "- **Arquitectura recomendada:** GitHub Actions entrena y commitea el modelo; "
         "Streamlit Cloud sirve la UI y **lee** los artefactos del repo.\n"
     )
@@ -100,16 +100,14 @@ with tab_train:
 
         def dispatch_workflow(owner: str, repo: str, workflow_file_or_name: str, ref: str, token: str):
             """
-            Dispara workflow_dispatch:
             POST /repos/{owner}/{repo}/actions/workflows/{workflow_id|file_name}/dispatches
             """
             if requests is None:
                 raise RuntimeError("El paquete 'requests' no está instalado.")
-            workflow_id = workflow_file_or_name.split("/")[-1]  # acepta nombre o ruta
+            workflow_id = workflow_file_or_name.split("/")[-1]
             url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches"
             headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
-            resp = requests.post(url, headers=headers, json={"ref": ref}, timeout=30)
-            return resp
+            return requests.post(url, headers=headers, json={"ref": ref}, timeout=30)
 
         missing = not all([owner, repo, token]) or (requests is None)
         if missing:
@@ -151,7 +149,6 @@ with tab_train:
                 exit_code = os.system("python train.py")
                 time.sleep(1.0)
             if exit_code == 0:
-                # Limpiar caché y forzar recarga
                 for clear_fn in (getattr(st, "cache_data", None), getattr(st, "cache_resource", None)):
                     try:
                         if clear_fn:
@@ -245,7 +242,7 @@ with tab_forecast:
         st.markdown("### ⚙️ Entrenamiento del modelo de forecast (demo)")
         colA, colB = st.columns(2)
 
-        # Botón A: Disparar workflow de GitHub Actions (recomendado)
+        # Botón A: GitHub Actions (recomendado)
         with colA:
             owner = st.secrets.get("GH_OWNER")
             repo  = st.secrets.get("GH_REPO")
@@ -298,19 +295,33 @@ with tab_forecast:
         parse_ts, fit_quick_sarimax, forecast_to_df
     )
 
-    # Helper para construir la serie histórica desde statsmodels, evitando endog 2D
+    # Helper robusto para construir la serie histórica desde statsmodels (evita endog 2D y chequea índice)
     def endog_series(res, saved_index: Optional[pd.DatetimeIndex] = None, meta: Optional[dict] = None) -> pd.Series:
         endog = np.asarray(res.model.endog).ravel()
-        idx = saved_index
-        if idx is None or len(getattr(idx, "__len__", [])) != len(endog):
+
+        def _same_len(idx, n) -> bool:
             try:
-                idx = res.model.data.row_labels
+                return idx is not None and len(idx) == n
+            except Exception:
+                return False
+
+        idx = saved_index if _same_len(saved_index, len(endog)) else None
+
+        # Intentar índice del propio modelo
+        if idx is None:
+            try:
+                idx2 = res.model.data.row_labels
+                if _same_len(idx2, len(endog)):
+                    idx = idx2
             except Exception:
                 idx = None
-        if idx is None or len(idx) != len(endog):
+
+        # Último recurso: construir un rango de fechas con freq/meta
+        if idx is None:
             freq = (meta or {}).get("freq", "MS")
             start = pd.to_datetime((meta or {}).get("train_start", "2000-01-01"))
             idx = pd.date_range(start=start, periods=len(endog), freq=freq)
+
         return pd.Series(endog, index=pd.DatetimeIndex(idx), name="y")
 
     # --- Sub-tabs de forecasting ---
