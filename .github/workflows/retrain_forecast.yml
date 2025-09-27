@@ -1,0 +1,62 @@
+name: retrain-forecast
+
+on:
+  schedule:
+    - cron: "30 9 * * 1"        # Lunes 09:30 UTC (separa 30' del clasificador)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: retrain-forecast
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --prefer-binary -r requirements.txt
+
+      - name: Train forecast demo
+        run: python forecast_train.py
+
+      - name: Upload forecast artifacts (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: forecast-artifacts
+          path: |
+            models/forecast_model.joblib
+            models/forecast_metadata.json
+          if-no-files-found: ignore
+
+      - name: Commit & Push artifacts
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add models/forecast_model.joblib models/forecast_metadata.json || true
+          git diff --cached --quiet || CHANGED=1
+          if [ "${CHANGED:-0}" -eq 1 ]; then
+            git commit -m "Auto: retrain forecast"
+            git pull --rebase origin ${{ github.ref_name }} || true
+            git push origin HEAD:${{ github.ref_name }}
+          else
+            echo "No changes"
+          fi
