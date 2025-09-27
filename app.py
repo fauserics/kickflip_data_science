@@ -295,8 +295,9 @@ with st.container(border=True):
                 st.error("Falló el entrenamiento local. Usá el botón de GitHub Actions.")
 
 
-    sub_demo, sub_upload = st.tabs(["📦 Demo pre-entrenada", "📤 Tu serie (entrena al vuelo)"])
-
+sub_demo, sub_upload, sub_manual = st.tabs(
+    ["📦 Demo pre-entrenada", "📤 Tu serie (CSV)", "✍️ Ingresar manualmente"]
+)
     # --- A) DEMO PRE-ENTRENADA ---
     with sub_demo:
         fobj = load_demo_forecast_model()
@@ -360,3 +361,85 @@ with st.container(border=True):
                 )
             except Exception as e:
                 st.error(f"No se pudo procesar la serie: {e}")
+
+# --- C) INGRESAR MANUALMENTE ---
+with sub_manual:
+    import plotly.graph_objects as go
+    from datetime import date, timedelta
+
+    st.caption("Cargá una serie corta a mano para probar el pronóstico al vuelo.")
+
+    # --- 1) Editor de tabla
+    st.markdown("#### Opción A: Editor de tabla")
+    # plantilla con 6 puntos diarios como ejemplo
+    today = pd.to_datetime(date.today())
+    df_default = pd.DataFrame({
+        "ds": [today + timedelta(days=i) for i in range(6)],
+        "y": [100, 102, 101, 103, 104, 105],
+    })
+    df_edit = st.data_editor(
+        df_default,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="ts_manual_editor",
+        column_config={
+            "ds": st.column_config.DateColumn("Fecha (ds)"),
+            "y": st.column_config.NumberColumn("Valor (y)", step=0.1),
+        }
+    )
+
+    st.markdown("#### Opción B: Pegar texto (CSV rápido)")
+    st.caption("Formato: 2 columnas `ds,y` separadas por coma. Ejemplo:\n\n```\n2024-01-01,100\n2024-01-02,101.5\n```\n")
+    txt = st.text_area("Pegar aquí", value="", height=140, key="ts_manual_text")
+
+    steps3 = st.number_input("Horizonte a pronosticar", 1, 120, 12, key="steps_manual")
+    run_manual = st.button("🔮 Entrenar & pronosticar (manual)")
+
+    if run_manual:
+        try:
+            # 1) tomar la fuente: texto si no está vacío; si no, el editor
+            if txt.strip():
+                df_in = pd.read_csv(pd.compat.StringIO(txt.strip()), header=None, names=["ds", "y"])
+            else:
+                df_in = df_edit.copy()
+
+            # 2) limpieza y chequeos básicos
+            if df_in.shape[1] < 2:
+                raise ValueError("Se necesitan dos columnas: fecha y valor (ds,y).")
+            df_in = df_in.rename(columns={df_in.columns[0]: "ds", df_in.columns[1]: "y"})
+            df_in["ds"] = pd.to_datetime(df_in["ds"], errors="coerce")
+            df_in["y"] = pd.to_numeric(df_in["y"], errors="coerce")
+            df_in = df_in.dropna().sort_values("ds")
+            if len(df_in) < 6:
+                raise ValueError("Ingresá al menos 6 observaciones para entrenar.")
+
+            # 3) normalizar a frecuencia fija y completar huecos
+            from forecast_utils import parse_ts, fit_quick_sarimax, forecast_to_df
+            s, freq = parse_ts(df_in)
+
+            with st.spinner(f"Entrenando SARIMAX (freq detectada: {freq})…"):
+                res3, order, seas, aic = fit_quick_sarimax(s)
+                yhat3 = res3.get_forecast(int(steps3)).predicted_mean.values
+
+            out3 = forecast_to_df(s, yhat3, int(steps3))
+
+            # 4) gráfico
+            fig3 = go.Figure()
+            fig3.add_scatter(x=s.index, y=s.values, mode="lines", name="histórico")
+            fig3.add_scatter(x=out3["ds"], y=out3["yhat"], mode="lines", name="pronóstico")
+            fig3.update_layout(
+                title=f"Pronóstico manual (orden={order}, seasonal={seas}, AIC={aic:.1f})",
+                xaxis_title="Fecha", yaxis_title="Valor"
+            )
+            st.plotly_chart(fig3, use_container_width=True)
+
+            # 5) descarga
+            st.download_button(
+                "⬇️ Descargar pronóstico (CSV)",
+                out3.to_csv(index=False).encode("utf-8"),
+                "forecast_manual.csv",
+                "text/csv"
+            )
+        except Exception as e:
+            st.error(f"No se pudo entrenar/forecastear con los datos ingresados: {e}")
+
