@@ -295,8 +295,8 @@ with st.container(border=True):
                 st.error("Falló el entrenamiento local. Usá el botón de GitHub Actions.")
 
 
-sub_demo, sub_upload, sub_manual = st.tabs(
-    ["📦 Demo pre-entrenada", "📤 Tu serie (CSV)", "✍️ Ingresar manualmente"]
+     sub_demo, sub_upload, sub_manual = st.tabs(
+           ["📦 Demo pre-entrenada", "📤 Tu serie (CSV)", "✍️ Ingresar manualmente"]
 )
     # --- A) DEMO PRE-ENTRENADA ---
     with sub_demo:
