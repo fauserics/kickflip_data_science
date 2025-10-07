@@ -23,25 +23,24 @@ from utils import (
 
 # ========================= Config básica =========================
 st.set_page_config(
-    page_title="Income & Forecast – Demo lista para vender",
+    page_title="Income, Forecast & EDA – Demo lista para vender",
     page_icon="📈",
     layout="wide"
 )
 
 st.markdown(
-    "# 📈 Income & 🔮 Forecast – Demo\n"
+    "# 📈 Income, 🔮 Forecast & 🔍 EDA – Demo\n"
     "**Prototipo escalable, listo para demos y ventas.**\n\n"
-    "Entrena con datos públicos reales (OpenML *Adult*), compara modelos, "
-    "elige el mejor y permite **scorear en tiempo real** por formulario o por archivo. "
-    "Además, **pronostica series** (forecasting) con SARIMAX."
+    "Entrena, compara y sirve un modelo tabular (OpenML *Adult*), scorea en tiempo real por formulario o archivo, "
+    "pronostica series con SARIMAX y hace **EDA automático**."
 )
 
 with st.expander("ℹ️ Cómo funciona"):
     st.markdown(
         "- **Clasificador:** OpenML *Adult* (ingresos > USD 50k). Modelos: LogReg, RandomForest, XGBoost (selección por ROC AUC).\n"
-        "- **Forecasting:** modelo SARIMAX (statsmodels). Demo pre-entrenada + entreno al vuelo con CSV o datos manuales.\n"
-        "- **Arquitectura recomendada:** GitHub Actions entrena y commitea el modelo; "
-        "Streamlit Cloud sirve la UI y **lee** los artefactos del repo.\n"
+        "- **Forecasting:** SARIMAX (statsmodels). Demo pre-entrenada + entreno al vuelo con CSV o datos manuales.\n"
+        "- **EDA:** modo **Ligero (nativo)** con Plotly y **Rápido (ydata-profiling)** embebido.\n"
+        "- **Arquitectura:** GitHub Actions entrena y commitea artefactos; Streamlit Cloud sirve la UI y los lee del repo.\n"
     )
 
 # ========================= KPIs de cabecera =========================
@@ -57,8 +56,8 @@ with col3:
 st.divider()
 
 # ========================= Tabs principales =========================
-tab_overview, tab_train, tab_realtime, tab_batch, tab_monitor, tab_forecast = st.tabs(
-    ["📊 Overview", "🛠️ Entrenar", "🧮 Scoring en tiempo real", "📂 Scoring por archivo", "📡 Monitor", "🔮 Forecasting"]
+tab_overview, tab_train, tab_realtime, tab_batch, tab_monitor, tab_forecast, tab_eda = st.tabs(
+    ["📊 Overview", "🛠️ Entrenar", "🧮 Scoring en tiempo real", "📂 Scoring por archivo", "📡 Monitor", "🔮 Forecasting", "🔍 EDA"]
 )
 
 # ========================= 1) OVERVIEW =========================
@@ -295,7 +294,7 @@ with tab_forecast:
         parse_ts, fit_quick_sarimax, forecast_to_df
     )
 
-    # Helper robusto para construir la serie histórica desde statsmodels (evita endog 2D y chequea índice)
+    # Helper robusto para construir la serie histórica desde statsmodels
     def endog_series(res, saved_index: Optional[pd.DatetimeIndex] = None, meta: Optional[dict] = None) -> pd.Series:
         endog = np.asarray(res.model.endog).ravel()
 
@@ -307,7 +306,6 @@ with tab_forecast:
 
         idx = saved_index if _same_len(saved_index, len(endog)) else None
 
-        # Intentar índice del propio modelo
         if idx is None:
             try:
                 idx2 = res.model.data.row_labels
@@ -316,7 +314,6 @@ with tab_forecast:
             except Exception:
                 idx = None
 
-        # Último recurso: construir un rango de fechas con freq/meta
         if idx is None:
             freq = (meta or {}).get("freq", "MS")
             start = pd.to_datetime((meta or {}).get("train_start", "2000-01-01"))
@@ -462,3 +459,95 @@ with tab_forecast:
                 )
             except Exception as e:
                 st.error(f"No se pudo entrenar/forecastear con los datos ingresados: {e}")
+
+# ========================= 7) EDA =========================
+with tab_eda:
+    st.subheader("Análisis Exploratorio de Datos (EDA)")
+
+    mode = st.radio("Modo de EDA", ["Ligero (nativo)", "Rápido (ydata-profiling)"], horizontal=True)
+    f = st.file_uploader("Subí un dataset (CSV, Parquet)", type=["csv", "parquet"])
+
+    if f is None:
+        st.info("Subí un archivo para comenzar. Tip: soporta CSV y Parquet.")
+    else:
+        # Lectura del dataset
+        try:
+            if f.name.lower().endswith(".parquet"):
+                df = pd.read_parquet(f)
+            else:
+                df = pd.read_csv(f)
+        except Exception as e:
+            st.error(f"No pude leer el archivo: {e}")
+            df = None
+
+        if df is not None:
+            st.success(f"Cargado: {df.shape[0]:,} filas × {df.shape[1]:,} columnas")
+            st.dataframe(df.head(10), use_container_width=True)
+
+            if mode.startswith("Rápido"):
+                # Auto-EDA con ydata-profiling (opcional)
+                try:
+                    from eda_utils import render_ydata_profile_html
+                    with st.spinner("Generando reporte…"):
+                        html = render_ydata_profile_html(df)
+                    import streamlit.components.v1 as components
+                    components.html(html, height=900, scrolling=True)
+                except Exception as e:
+                    st.error(f"No pude generar el reporte de ydata-profiling: {e}")
+                    st.info("Probá el modo 'Ligero (nativo)' para un análisis más rápido.")
+            else:
+                # EDA nativo (ligero) con Plotly
+                from eda_utils import (
+                    basic_overview, split_columns, plot_numeric_hist, plot_categoric_bar,
+                    corr_heatmap, missing_bar, target_relationships, dataframe_head_csv
+                )
+
+                # Resumen
+                info = basic_overview(df)
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Filas", info["rows"])
+                c2.metric("Columnas", info["cols"])
+                c3.metric("Memoria (MB)", info["memory_mb"])
+                with st.expander("Tipos, cardinalidad y faltantes"):
+                    st.write("**Tipos:**", info["dtypes"])
+                    st.write("**# Únicos:**", info["nunique"])
+                    st.write("**Faltantes:**", info["missing"])
+
+                # Distribuciones
+                num_cols, cat_cols = split_columns(df)
+                st.markdown("#### Distribuciones")
+                if num_cols:
+                    colnum = st.multiselect("Numéricas a graficar", num_cols, default=num_cols[:4], key="eda_num")
+                    for col in colnum:
+                        st.plotly_chart(plot_numeric_hist(df, col), use_container_width=True)
+                if cat_cols:
+                    colcat = st.multiselect("Categóricas a graficar", cat_cols, default=cat_cols[:4], key="eda_cat")
+                    for col in colcat:
+                        st.plotly_chart(plot_categoric_bar(df, col), use_container_width=True)
+
+                # Correlaciones y faltantes
+                st.markdown("#### Correlaciones y faltantes")
+                fig_corr = corr_heatmap(df, num_cols)
+                if fig_corr:
+                    st.plotly_chart(fig_corr, use_container_width=True)
+                else:
+                    st.info("Se necesitan al menos 2 columnas numéricas para la correlación.")
+                fig_miss = missing_bar(df)
+                if fig_miss:
+                    st.plotly_chart(fig_miss, use_container_width=True)
+
+                # Relación con target (opcional)
+                st.markdown("#### Análisis por variable objetivo (opcional)")
+                target = st.selectbox("Seleccioná una columna objetivo (opcional)", ["—"] + df.columns.tolist())
+                if target != "—":
+                    plots = target_relationships(df, target, num_cols, cat_cols)
+                    for fig in plots:
+                        st.plotly_chart(fig, use_container_width=True)
+
+                # Export rápido (muestra)
+                st.download_button(
+                    "⬇️ Descargar muestra (CSV, 50 filas)",
+                    data=dataframe_head_csv(df, n=50),
+                    file_name="sample_50.csv",
+                    mime="text/csv"
+                )
