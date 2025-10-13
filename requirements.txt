@@ -10,4 +10,5 @@ requests>=2.31
 statsmodels>=0.14
 plotly>=5.23
 ydata-profiling>=4.8
+setuptools>=68
 
