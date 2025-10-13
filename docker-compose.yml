@@ -1,0 +1,23 @@
+version: "3.9"
+services:
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kickflip-ui:local
+    container_name: kickflip_ui
+    ports:
+      - "8501:8501"
+    environment:
+      # Secrets opcionales (para disparar workflows desde la UI)
+      GH_OWNER: "${GH_OWNER:-}"
+      GH_REPO:  "${GH_REPO:-}"
+      GH_REF:   "${GH_REF:-main}"
+      GH_TOKEN: "${GH_TOKEN:-}"
+      GH_WF_CLASSIFIER: "${GH_WF_CLASSIFIER:-retrain-classifier.yml}"
+      GH_WF_FORECAST:   "${GH_WF_FORECAST:-retrain-forecast.yml}"
+    volumes:
+      # Monta modelos/datos en caliente (solo lectura); así podés re-entrenar y verlos sin rebuild
+      - ./models:/app/models:ro
+      - ./data:/app/data:ro
+    restart: unless-stopped
