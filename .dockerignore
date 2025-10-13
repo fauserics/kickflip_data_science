@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.dist/
+.venv/
+venv/
+
+# Node/others
+node_modules/
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI artifacts
+**/artifacts/
+**/site/
+
+# Large local data (usa LFS o descarga en runtime)
+data/*
+!data/train_classif.csv
+!data/ts_train.csv
+
+# Models opcionales (los podés bakear o montar)
+# Si no querés bakearlos, ignoralos aquí:
+# models/*
+# !models/.gitkeep
