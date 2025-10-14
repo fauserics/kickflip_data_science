@@ -32,7 +32,7 @@ def require_login(title: str = "Kickflip"):
     st.set_page_config(page_title=title)
     st.title(title)
 
-    # Si ya hay sesión, devolver datos
+    # Si ya hay sesión, mostrar usuario y botón logout
     if "id_token" in st.session_state and "uid" in st.session_state:
         with st.sidebar:
             st.caption(f"Usuario: {st.session_state.get('email','')}")
@@ -40,8 +40,8 @@ def require_login(title: str = "Kickflip"):
                 logout()
         return st.session_state["uid"], st.session_state["id_token"], st.session_state.get("email")
 
-    # UI de auth
     tabs = st.tabs(["Ingresar", "Registrarse", "Olvidé mi clave"])
+
     with tabs[0]:
         em = st.text_input("Email")
         pw = st.text_input("Password", type="password")
