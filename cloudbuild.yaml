@@ -1,0 +1,12 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build','-t','southamerica-east1-docker.pkg.dev/$PROJECT_ID/kickflip/kickflip:$SHORT_SHA','-t','southamerica-east1-docker.pkg.dev/$PROJECT_ID/kickflip/kickflip:latest','.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push','southamerica-east1-docker.pkg.dev/$PROJECT_ID/kickflip/kickflip:$SHORT_SHA']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push','southamerica-east1-docker.pkg.dev/$PROJECT_ID/kickflip/kickflip:latest']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args: ['run','deploy','kickflip','--image','southamerica-east1-docker.pkg.dev/$PROJECT_ID/kickflip/kickflip:latest','--region','southamerica-east1','--allow-unauthenticated','--port','8501','--memory','1Gi']
+options:
+  logging: CLOUD_LOGGING_ONLY
