@@ -23,14 +23,6 @@ from utils import (
     load_model, load_metadata, load_schema,
     validate_dataframe, pretty_metric_table
 )
-
-# ========================= Config básica =========================
-st.set_page_config(
-    page_title="Income, Forecast & EDA – Demo lista para vender",
-    page_icon="📈",
-    layout="wide"
-)
-
 # ========================= Variables de entorno (REMPLAZAN st.secrets) =========================
 def env(name: str, default: Optional[str] = None) -> Optional[str]:
     return os.getenv(name, default)
@@ -41,6 +33,14 @@ GH_REF           = env("GH_REF", "main")
 GH_TOKEN         = env("GH_TOKEN")  # inyectar con Secret Manager si se usa
 GH_WF_CLASSIFIER = env("GH_WF_CLASSIFIER", "retrain-classifier.yml")
 GH_WF_FORECAST   = env("GH_WF_FORECAST", "retrain-forecast.yml")
+
+# ========================= Config básica =========================
+st.set_page_config(
+    page_title="Income, Forecast & EDA – Demo lista para vender",
+    page_icon="📈",
+    layout="wide"
+)
+
 
 # ========================= Barrera de login (antes de dibujar la app) =========================
 uid, id_token, email = require_login("Kickflip")
