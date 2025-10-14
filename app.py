@@ -4,6 +4,14 @@ import os
 import time
 from typing import Dict, Any, Optional
 
+from auth import require_login, authorized_headers
+
+uid, id_token, email = require_login("Kickflip")
+
+st.success("Autenticado ✅")
+st.write(f"UID: {uid}")
+st.write(f"Email: {email}")
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
