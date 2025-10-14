@@ -1,51 +1,48 @@
 # app.py — Kickflip en Cloud Run con login Firebase y env vars (sin st.secrets)
-# Basado en tu app original: mantiene tabs, entrenamiento, forecast y EDA.  ← (archivo original referenciado)
+# Basado en tu app original; mantiene tabs, entrenamiento, forecasting y EDA.
 
 import io
 import os
 import time
 from typing import Dict, Any, Optional
 
-# --- IMPORTS que usa tu app ---
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-# requests es opcional (solo para disparar GitHub Actions)
+# Opcional (para disparar GitHub Actions)
 try:
     import requests
 except Exception:
     requests = None
 
+from auth import require_login, authorized_headers  # login Firebase (mod. aparte)
 from utils import (
     load_model, load_metadata, load_schema,
     validate_dataframe, pretty_metric_table
 )
 
-# --- LOGIN (usa tu módulo auth existente) ---
-from auth import require_login, authorized_headers  # noqa: F401
-
-# ========================= Config básica (debe ir antes de cualquier draw) =========================
+# ========================= Config básica =========================
 st.set_page_config(
     page_title="Income, Forecast & EDA – Demo lista para vender",
     page_icon="📈",
     layout="wide"
 )
 
-# ========================= Variables de entorno (remplazan st.secrets) =========================
+# ========================= Variables de entorno (REMPLAZAN st.secrets) =========================
 def env(name: str, default: Optional[str] = None) -> Optional[str]:
     return os.getenv(name, default)
 
-GH_OWNER         = env("GH_OWNER") or "fauserics"
-GH_REPO          = env("GH_REPO") or "kickflip_data_science"
-GH_REF           = env("GH_REF") or "main"
-GH_TOKEN         = env("GH_TOKEN")  # inyectalo con Secret Manager si lo usás
-GH_WF_CLASSIFIER = env("GH_WF_CLASSIFIER") or "retrain-classifier.yml"
-GH_WF_FORECAST   = env("GH_WF_FORECAST") or "retrain-forecast.yml"
+GH_OWNER         = env("GH_OWNER", "fauserics")
+GH_REPO          = env("GH_REPO", "kickflip_data_science")
+GH_REF           = env("GH_REF", "main")
+GH_TOKEN         = env("GH_TOKEN")  # inyectar con Secret Manager si se usa
+GH_WF_CLASSIFIER = env("GH_WF_CLASSIFIER", "retrain-classifier.yml")
+GH_WF_FORECAST   = env("GH_WF_FORECAST", "retrain-forecast.yml")
 
-# ========================= Barrera de login (antes de mostrar la app) =========================
+# ========================= Barrera de login (antes de dibujar la app) =========================
 uid, id_token, email = require_login("Kickflip")
 st.success("Autenticado ✅")
 st.write(f"UID: {uid}")
@@ -108,7 +105,7 @@ with tab_train:
 
     subtab_actions, subtab_local = st.tabs(["🚀 GitHub Actions (recomendado)", "🧪 Local en el runtime (opcional)"])
 
-    # ---------- A) Disparar GitHub Actions (dos workflows) ----------
+    # ---------- A) Disparar GitHub Actions ----------
     with subtab_actions:
         st.caption("Dispara los workflows de GitHub. Cuando terminen y hagan push, la app usará los modelos nuevos.")
 
@@ -119,21 +116,21 @@ with tab_train:
             if requests is None:
                 raise RuntimeError("El paquete 'requests' no está instalado.")
             if not token:
-                raise RuntimeError("Falta GH_TOKEN (inyectalo como secreto).")
+                raise RuntimeError("Falta GH_TOKEN (inyectalo como secreto en Cloud Run).")
             workflow_id = workflow_file_or_name.split("/")[-1]
             url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches"
             headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
             return requests.post(url, headers=headers, json={"ref": ref}, timeout=30)
 
-        missing = not all([GH_OWNER, GH_REPO, GH_TOKEN]) or (requests is None)
+        missing = not all([GH_OWNER, GH_REPO]) or (requests is None)
         if missing:
-            st.warning("Definí GH_TOKEN (secreto) + GH_OWNER + GH_REPO + (opcional GH_REF/GH_WF_*).")
+            st.warning("Definí GH_OWNER/GH_REPO (env vars) y opcional GH_REF/GH_WF_*; instala 'requests' si falta.")
 
         colA, colB = st.columns(2)
         with colA:
             if st.button("🔁 Re-entrenar **Clasificador** (Adult)"):
                 if missing:
-                    st.error("Faltan env vars/secretos (GH_TOKEN/OWNER/REPO) o el paquete 'requests'.")
+                    st.error("Faltan env vars o el paquete 'requests'.")
                 else:
                     with st.spinner("Lanzando workflow del clasificador…"):
                         r = dispatch_workflow(GH_OWNER, GH_REPO, GH_WF_CLASSIFIER, GH_REF, GH_TOKEN)
@@ -145,7 +142,7 @@ with tab_train:
         with colB:
             if st.button("🔁 Re-entrenar **Forecasting**"):
                 if missing:
-                    st.error("Faltan env vars/secretos (GH_TOKEN/OWNER/REPO) o el paquete 'requests'.")
+                    st.error("Faltan env vars o el paquete 'requests'.")
                 else:
                     with st.spinner("Lanzando workflow de forecasting…"):
                         r = dispatch_workflow(GH_OWNER, GH_REPO, GH_WF_FORECAST, GH_REF, GH_TOKEN)
@@ -157,9 +154,9 @@ with tab_train:
         if GH_OWNER and GH_REPO:
             st.link_button("🧭 Ver runs en GitHub Actions", f"https://github.com/{GH_OWNER}/{GH_REPO}/actions", type="secondary")
 
-    # ---------- B) Entrenamiento local (opcional; puede fallar en entornos serverless) ----------
+    # ---------- B) Entrenamiento local (opcional; puede fallar en serverless) ----------
     with subtab_local:
-        st.caption("Ejecuta `python train.py` en el entorno actual. Útil en local; en Cloud Run/entornos serverless puede fallar por límites.")
+        st.caption("Ejecuta `python train.py` en este entorno. En Cloud Run puede fallar por límites.")
         if st.button("▶️ Entrenar aquí (local)"):
             with st.spinner("Entrenando…"):
                 exit_code = os.system("python train.py")
@@ -260,21 +257,20 @@ with tab_forecast:
 
         # Botón A: GitHub Actions (recomendado)
         with colA:
-
             def dispatch_workflow(owner: str, repo: str, workflow_file_or_name: str, ref: str, token: str):
                 if requests is None:
                     raise RuntimeError("El paquete 'requests' no está instalado.")
                 if not token:
-                    raise RuntimeError("Falta GH_TOKEN (inyectalo como secreto).")
+                    raise RuntimeError("Falta GH_TOKEN (inyectalo como secreto en Cloud Run).")
                 workflow_id = workflow_file_or_name.split("/")[-1]
                 url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches"
                 headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
                 return requests.post(url, headers=headers, json={"ref": ref}, timeout=30)
 
-            disabled = not all([GH_OWNER, GH_REPO, GH_TOKEN]) or (requests is None)
+            disabled = not all([GH_OWNER, GH_REPO]) or (requests is None)
             if st.button("🔁 Re-entrenar forecasting en GitHub"):
                 if disabled:
-                    st.error("Faltan env vars/secretos (GH_TOKEN/OWNER/REPO) o el paquete 'requests'.")
+                    st.error("Faltan env vars o el paquete 'requests'.")
                 else:
                     with st.spinner("Lanzando workflow de forecasting en GitHub Actions…"):
                         r = dispatch_workflow(GH_OWNER, GH_REPO, GH_WF_FORECAST, GH_REF, GH_TOKEN)
@@ -308,7 +304,7 @@ with tab_forecast:
         parse_ts, fit_quick_sarimax, forecast_to_df
     )
 
-    # Helper robusto para construir la serie histórica desde statsmodels
+    # Helper para construir la serie histórica desde statsmodels
     def endog_series(res, saved_index: Optional[pd.DatetimeIndex] = None, meta: Optional[dict] = None) -> pd.Series:
         endog = np.asarray(res.model.endog).ravel()
 
