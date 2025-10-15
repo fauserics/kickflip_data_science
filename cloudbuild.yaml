@@ -8,5 +8,4 @@ steps:
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args: ['run','deploy','kickflip','--image','southamerica-east1-docker.pkg.dev/$PROJECT_ID/kickflip/kickflip:latest','--region','southamerica-east1','--allow-unauthenticated','--port','8501','--memory','1Gi']
-options:
-  logging: CLOUD_LOGGING_ONLY
+options: { logging: CLOUD_LOGGING_ONLY }
