@@ -1,4 +1,5 @@
 steps:
+  # Diagnóstico: muestra qué archivos recibió Cloud Build del repo
   - name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
     args:
@@ -6,9 +7,10 @@ steps:
       - |
         echo "Commit: $COMMIT_SHA"
         pwd
-        echo "== files =="
+        echo "== files in repo (depth 2) =="
         find . -maxdepth 2 -type f | sort
 
+  # Build de la imagen (el contexto '.' debe contener Dockerfile, app.py, auth.py)
   - name: gcr.io/cloud-builders/docker
     args:
       [
@@ -18,12 +20,23 @@ steps:
         "."
       ]
 
+  # Verificación: listar lo que quedó dentro de la imagen en /app
+  - name: gcr.io/cloud-builders/docker
+    args:
+      [
+        "run","--rm",
+        "southamerica-east1-docker.pkg.dev/$PROJECT_ID/kickflip/kickflip:$SHORT_SHA",
+        "bash","-lc","ls -la /app | sed -n '1,120p'; echo '---'; grep -n 'require_login' -n /app/app.py || true"
+      ]
+
+  # Push de la imagen a Artifact Registry (GCR moderno)
   - name: gcr.io/cloud-builders/docker
     args: ["push","southamerica-east1-docker.pkg.dev/$PROJECT_ID/kickflip/kickflip:$SHORT_SHA"]
 
   - name: gcr.io/cloud-builders/docker
     args: ["push","southamerica-east1-docker.pkg.dev/$PROJECT_ID/kickflip/kickflip:latest"]
 
+  # Deploy a Cloud Run
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
@@ -35,6 +48,5 @@ steps:
         "--port","8501",
         "--memory","1Gi"
       ]
-
 options:
   logging: CLOUD_LOGGING_ONLY
