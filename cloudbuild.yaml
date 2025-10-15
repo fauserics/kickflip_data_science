@@ -1,6 +1,19 @@
 steps:
+  # 1) Ver qué ve Cloud Build del repo
   - name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
-    args: ["-lc", "echo OK-$COMMIT_SHA; pwd; ls -la; exit 0"]
-options:
-  logging: CLOUD_LOGGING_ONLY
+    args: ["-lc","echo Commit:$COMMIT_SHA; pwd; echo ==files==; find . -maxdepth 2 -type f | sort"]
+
+  # 2) Construir la imagen (RAÍZ del repo; requiere Dockerfile aquí)
+  - name: gcr.io/cloud-builders/docker
+    args: ["build",
+           "-t","southamerica-east1-docker.pkg.dev/$PROJECT_ID/kickflip/kickflip:$SHORT_SHA",
+           "-t","southamerica-east1-docker.pkg.dev/$PROJECT_ID/kickflip/kickflip:latest",
+           "."]
+
+  # 3) Ver dentro de la imagen que /app tenga tus .py
+  - name: gcr.io/cloud-builders/docker
+    args: ["run","--rm",
+           "southamerica-east1-docker.pkg.dev/$PROJECT_ID/kickflip/kickflip:$SHORT_SHA",
+           "bash","-lc","echo '=== /app ==='; ls -la /app | sed -n '1,120p'; echo '---'; ls -la /app/*.py || true"]
+options: { logging: CLOUD_LOGGING_ONLY }
